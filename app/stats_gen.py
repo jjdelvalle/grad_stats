@@ -17,6 +17,7 @@ def vec_dt_replace(series, year=None, month=None, day=None):
          'month': series.dt.month if month is None else month,
          'day': series.dt.day if day is None else day})
 
+@st.cache
 def create_filter(df,
                   degree: str = None,
                   decisionfin: Union[str, list] = None,
@@ -27,10 +28,13 @@ def create_filter(df,
                   gpa: bool = False,
                   gre: bool = False):
     filt = [True] * len(df)
-    if degree is not None:
-        filt = (filt) & (df['degree'] == degree)
 
     # NEEDS REFACTORING
+    if degree is not None:
+        if isinstance(degree, str):
+            filt = (filt) & (df['degree'].str.contains(degree, case=False))
+        elif isinstance(degree, list):
+            filt = (filt) & (df['degree'].isin(degree))
     if decisionfin is not None:
         if isinstance(decisionfin, str):
             filt = (filt) & (df['decisionfin'].str.contains(decisionfin, case=False))
@@ -41,19 +45,16 @@ def create_filter(df,
             filt = (filt) & (df['institution'].str.contains(institution, case=False))
         elif isinstance(institution, list):
             filt = (filt) & (df['institution'].isin(institution))
-
     if field is not None and len(field) > 0:
         if isinstance(field, str):
             filt = (filt) & (df['major'] == field)
         elif isinstance(field, list):
             filt = (filt) & (df['major'].isin(field))
-
     if status is not None and len(status) > 0:
         if isinstance(status, str):
             filt = (filt) & (df['status'] == status)
         elif isinstance(status, list):
             filt = (filt) & (df['status'].isin(status))
-
     if seasons is not None and len(seasons) > 0:
         if isinstance(seasons, str):
             filt = (filt) & (df['season'] == seasons)
@@ -73,10 +74,17 @@ def get_uni_stats(u_df,
 					field: str = None,
 					status: list = None,
 					seasons: list = None,
-					hue='decisionfin'):
+                    stack: bool = False,
+					hue: str = 'decisionfin',
+                    filt = None):
     title = title if title is not None else search
-    if degree not in ['MS', 'PhD', 'MEng', 'MFA', 'MBA', 'Other']:
+    if isinstance(degree, str) and degree not in ['MS', 'PhD', 'MEng', 'MFA', 'MBA', 'Other']:
         degree = 'PhD'
+
+    if stack:
+        gpa_multiple = 'stack'
+    else:
+        gpa_multiple = 'dodge'
     # Clean up the data a bit, this probably needs a lot more work
     # Maybe its own method, too
     u_df = u_df.copy()
@@ -108,8 +116,13 @@ def get_uni_stats(u_df,
     fig.set_size_inches(20, 20)
     
     # Timeline stats
-    mscs_filt = create_filter(u_df, degree, ['Accepted', 'Rejected', 'Interview'], search, field, status, seasons)
+    if filt is None:
+        mscs_filt = create_filter(u_df, degree, ['Accepted', 'Rejected', 'Interview'], search, field, status, seasons)
+    else:
+        mscs_filt = filt
     mscs_filt = (mscs_filt) & (u_df['uniform_dates'].astype(str) <= '2020-06-00')
+    if sum(mscs_filt) == 0:
+        return fig
     sns.histplot(data=u_df[mscs_filt],
                  x='uniform_dates',
                  hue=hue,
@@ -158,25 +171,29 @@ def get_uni_stats(u_df,
     
     # Get GPA stats
     gpa_filt = (mscs_filt) & (~u_df['gpafin'].isna()) & (u_df['gpafin'] <= 4)
-    sns.histplot(data=u_df[gpa_filt],
-                 x='gpafin',
-                 hue=hue,
-                 hue_order=hue_order,
-                 bins=20,
-                 ax=ax[0][1])
-    ax[0][1].set_xlabel("GPA")
-    ax[0][1].set_ylabel("Count")
-    ax[0][1].set_title("GPA Distribution")
-    # Add frequency counts
-    h, l = ax[0][1].get_legend_handles_labels()
-    if h is not None and l is not None:
-        if hue == 'decisionfin':
-            counts = u_df[gpa_filt][hue].value_counts().reindex(hue_order)
-            l = [f'{value} (n={count})' for value, count in counts.iteritems()]
-            ax[0][1].legend(handles=[acc_patch, rej_patch, int_patch], labels=l, title="Decision")
+    if sum(gpa_filt) > 0:
+        sns.histplot(data=u_df[gpa_filt],
+                     x='gpafin',
+                     hue=hue,
+                     hue_order=hue_order,
+                     multiple=gpa_multiple,
+                     bins=20,
+                     ax=ax[0][1])
+        ax[0][1].set_xlabel("GPA")
+        ax[0][1].set_ylabel("Count")
+        ax[0][1].set_title("GPA Distribution (stacked values)")
+        # Add frequency counts
+        h, l = ax[0][1].get_legend_handles_labels()
+        if h is not None and l is not None:
+            if hue == 'decisionfin':
+                counts = u_df[gpa_filt][hue].value_counts().reindex(hue_order)
+                l = [f'{value} (n={count})' for value, count in counts.iteritems()]
+                ax[0][1].legend(handles=[acc_patch, rej_patch, int_patch], labels=l, title="Decision")
 
     # Get GRE stats
     gre_filt = (mscs_filt) & (~u_df['grev'].isna()) & (~u_df['grem'].isna()) & (u_df['new_gre'])
+    if sum(gre_filt) == 0:
+        return fig
     dfq = u_df[gre_filt][['grem', hue]]
     dfq = dfq.assign(gre_type='Quant')
     dfq.columns = ['score', hue, 'gre_type']
@@ -217,38 +234,45 @@ def get_uni_stats(u_df,
     ax[1][1].set_title("GRE AWA Score distribution")
     
     # Save file to output directory
-    fig.suptitle(title + ', ' + str(field) + ' ' + str(degree), size='xx-large')
-    return fig
+    fig.suptitle(title + ', ' + ', '.join(field) + ' ' + ', '.join(degree) + '', size='xx-large')
+    return fig, mscs_filt
 
 @st.cache
 def load_data():
-	grad_df = pd.read_csv('app/data/full_data.csv', index_col=0, low_memory=False)
-	return grad_df
+    grad_df = pd.read_csv('app/data/full_data.csv', index_col=0, low_memory=False)
+    grad_df.loc[:, 'institution'] = grad_df['institution'].str.strip()
+    grad_df.loc[:, 'institution'] = grad_df['institution'].str.replace(r'[^\w() ]', '')
+    grad_df.loc[:, 'major'] = grad_df['major'].str.strip()
+    grad_df.loc[:, 'major'] = grad_df['major'].str.replace(r'[^\w ]()', '')
+    grad_df = grad_df[(grad_df['new_gre'] == True) | (grad_df['new_gre'].isna())]
+    return grad_df
+
+grad_df = load_data()
+
+insts = grad_df['institution'].drop_duplicates().sort_values().tolist()
+majors = grad_df['major'].drop_duplicates().sort_values().tolist()
+degrees = grad_df['degree'].drop_duplicates().sort_values().tolist()
+seasons = grad_df['season'].drop_duplicates().sort_values().tolist()
+status = grad_df['status'].drop_duplicates().sort_values().tolist()
 
 st.title('GradCafe Stats Generator')
-grad_df = load_data()
-grad_df.loc[:, 'institution'] = grad_df['institution'].str.strip()
-grad_df = grad_df[(grad_df['new_gre'] == True) | (grad_df['new_gre'].isna())]
+
+st.sidebar.markdown('## Filters')
 
 # Institution filter
-insts = grad_df['institution'].drop_duplicates().sort_values()
 inst_choice = st.sidebar.selectbox('Institution:', insts)
-
 # Major filter
-majors = grad_df['major'].drop_duplicates().sort_values()
 major_choice = st.sidebar.multiselect('Major:', majors)
-
 # Degree filter
-degrees = grad_df['degree'].drop_duplicates().sort_values()
 deg_choice = st.sidebar.multiselect('Degree:', degrees)
-
 # Season filter
-seasons = grad_df['season'].drop_duplicates().sort_values()
 season_choice = st.sidebar.multiselect('Season:', seasons)
-
 # Status filter
-status = grad_df['status'].drop_duplicates().sort_values()
 status_choice = st.sidebar.multiselect('Status:', status)
+
+st.sidebar.markdown('## Display options')
+# Display options
+stack = st.sidebar.checkbox('Stack bars in GPA plot', value=False)
 
 # grad_df.drop(columns=['decdate_ts', 'date_add_ts'], inplace=True)
 # grad_df.columns = ['Institution',
@@ -267,13 +291,13 @@ status_choice = st.sidebar.multiselect('Status:', status)
 # 					'Entry Date',
 # 					'Comment']
 
-fig = get_uni_stats(grad_df,
+fig, filt = get_uni_stats(grad_df,
 			  search=inst_choice,
 			  title=inst_choice,
 			  degree=deg_choice,
 			  field=major_choice,
 			  status=status_choice,
-			  seasons=season_choice)
+			  seasons=season_choice,
+              stack=stack)
 
 st.pyplot(fig)
-st.write(grad_df.head(5))
