@@ -30,7 +30,7 @@ def create_filter(df,
     filt = [True] * len(df)
 
     # NEEDS REFACTORING
-    if degree is not None:
+    if degree is not None and len(degree) > 0:
         if isinstance(degree, str):
             filt = (filt) & (df['degree'].str.contains(degree, case=False))
         elif isinstance(degree, list):
@@ -235,15 +235,15 @@ def get_uni_stats(u_df,
     
     # Save file to output directory
     fig.suptitle(title + ', ' + ', '.join(field) + ' ' + ', '.join(degree) + '', size='xx-large')
-    return fig, mscs_filt
+    return fig
 
 @st.cache
 def load_data():
     grad_df = pd.read_csv('app/data/full_data.csv', index_col=0, low_memory=False)
     grad_df.loc[:, 'institution'] = grad_df['institution'].str.strip()
-    grad_df.loc[:, 'institution'] = grad_df['institution'].str.replace(r'[^\w() ]', '')
+    grad_df.loc[:, 'institution'] = grad_df['institution'].str.replace(r'[^\w\(\) ]', '', regex=True)
     grad_df.loc[:, 'major'] = grad_df['major'].str.strip()
-    grad_df.loc[:, 'major'] = grad_df['major'].str.replace(r'[^\w ]()', '')
+    grad_df.loc[:, 'major'] = grad_df['major'].str.replace(r'[^\w ]\(\)', '', regex=True)
     grad_df = grad_df[(grad_df['new_gre'] == True) | (grad_df['new_gre'].isna())]
     return grad_df
 
@@ -291,7 +291,7 @@ stack = st.sidebar.checkbox('Stack bars in GPA plot', value=False)
 # 					'Entry Date',
 # 					'Comment']
 
-fig, filt = get_uni_stats(grad_df,
+fig = get_uni_stats(grad_df,
 			  search=inst_choice,
 			  title=inst_choice,
 			  degree=deg_choice,
