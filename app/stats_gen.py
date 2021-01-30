@@ -11,6 +11,9 @@ import matplotlib.patches as mpatches
 import datetime
 from typing import Union
 
+st.set_page_config(page_title='Grad Stats',
+         page_icon=':coffee:')
+
 def vec_dt_replace(series, year=None, month=None, day=None):
     return pd.to_datetime(
         {'year': series.dt.year if year is None else year,
@@ -255,9 +258,7 @@ degrees = grad_df['degree'].drop_duplicates().sort_values().tolist()
 seasons = grad_df['season'].drop_duplicates().sort_values().tolist()
 status = grad_df['status'].drop_duplicates().sort_values().tolist()
 
-st.set_page_config('Grad Stats')
-st.title(page_title='GradCafe Stats Generator',
-         page_icon=':coffee:')
+st.title('GradCafe Stats Generator')
 
 st.sidebar.markdown('## Filters')
 
