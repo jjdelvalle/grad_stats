@@ -255,7 +255,9 @@ degrees = grad_df['degree'].drop_duplicates().sort_values().tolist()
 seasons = grad_df['season'].drop_duplicates().sort_values().tolist()
 status = grad_df['status'].drop_duplicates().sort_values().tolist()
 
-st.title('GradCafe Stats Generator')
+st.set_page_config('Grad Stats')
+st.title(page_title='GradCafe Stats Generator',
+         page_icon=':coffee:')
 
 st.sidebar.markdown('## Filters')
 
