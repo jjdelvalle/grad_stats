@@ -40,8 +40,6 @@ def filter_by(df, by: Union[str, dict], value: Union[str, list] = None, exact: b
                 filt = filt & (df[k].str.contains(value, case=False))
         elif isinstance(value, list) and len(value) > 0:
             filt = filt & (df[k].isin(value))
-
-        print(k, value)
     return df[filt]
 
 @st.cache
@@ -63,14 +61,16 @@ def create_filter(df,
     return filter_by(df, filter_dict)
 
 def get_uni_stats(u_df,
-					search: str = None,
-					title: str = None,
-					degree: str = 'PhD',
-					field: str = None,
-					status: list = None,
-					seasons: list = None,
+                    search: str = None,
+                    title: str = None,
+                    degree: str = 'PhD',
+                    field: str = None,
+                    status: list = None,
+                    seasons: list = None,
                     stack: bool = False,
-					hue: str = 'decisionfin',
+                    axis_lines: bool = False,
+                    grid_lines: bool = False,
+                    hue: str = 'decisionfin',
                     debug: bool = False):
     if debug:
         start_time = time.time()
@@ -84,7 +84,10 @@ def get_uni_stats(u_df,
         gpa_multiple = 'dodge'
 
     # Trying to pick red/green colorblind-friendly colors
-    sns.set_theme(style="white", font_scale=1)
+    if grid_lines:
+        sns.set_theme(style="whitegrid", font_scale=1)
+    else:
+        sns.set_theme(style="white", font_scale=1)
     flatui = ["#2eff71", "#ff0000", "#0000ff"]
     sns.set_palette(flatui)
     acc_patch = mpatches.Patch(color='#2eff7180')
@@ -253,18 +256,17 @@ def get_uni_stats(u_df,
         start_time = time.time()
     
 
-    sns.despine(left=True)
+    if not axis_lines:
+        sns.despine(left=True)
     fig.suptitle(f"{title} {', '.join(field)} {', '.join(degree)}", size=25)
     fig.tight_layout()
     return fig
 
 @st.cache
 def load_data():
-    grad_df = pd.read_csv('app/data/full_data.csv', index_col=0, low_memory=False)
-    grad_df.loc[:, 'institution'] = grad_df['institution'].str.strip()
-    grad_df.loc[:, 'institution'] = grad_df['institution'].str.replace(r'[^\w\(\) ]', '', regex=True)
-    grad_df.loc[:, 'major'] = grad_df['major'].str.strip()
-    grad_df.loc[:, 'major'] = grad_df['major'].str.replace(r'[^\w ]\(\)', '', regex=True)
+    grad_df = pd.read_csv('app/data/full_data_clean.csv', index_col=0, low_memory=False)
+    grad_df.loc[:, 'institution'] = grad_df['clean_institution']
+    grad_df.loc[:, 'major'] = grad_df['clean_major']
     grad_df = grad_df[(grad_df['new_gre'] == True) | (grad_df['new_gre'].isna())]
     grad_df = grad_df[~grad_df['decdate'].isna()]
     grad_df.loc[:,'year'] = grad_df['decdate'].str[-4:].astype(int)
@@ -274,6 +276,14 @@ def load_data():
     # Get december dates to be from "2019" so Fall decisions that came in Dec come before the Jan ones.
     dec_filter = grad_df['uniform_dates'] > datetime.datetime.strptime('2020-11-30', '%Y-%m-%d')
     grad_df.loc[dec_filter, 'uniform_dates'] = vec_dt_replace(pd.to_datetime(grad_df[dec_filter]['uniform_dates']), year=2019)
+    grad_df.drop(columns=['comment',
+                          'date_add',
+                          'clean_institution',
+                          'clean_major',
+                          'date_add_ts',
+                          'sub',
+                          'decdate_ts',
+                          'method'], inplace=True)
     return grad_df
 
 grad_df = load_data()
@@ -311,15 +321,19 @@ status_choice = st.sidebar.multiselect('Status:', status)
 st.sidebar.markdown('## Display options')
 # Display options
 stack = st.sidebar.checkbox('Stack bars in GPA plot', value=False)
+axis_lines = st.sidebar.checkbox('Show axis lines in plots', value=False)
+grid_lines = st.sidebar.checkbox('Show grid lines in plots', value=False)
 
 fig = get_uni_stats(grad_df,
-			  search=inst_choice,
-			  title=inst_choice,
-			  degree=deg_choice,
-			  field=major_choice,
-			  status=status_choice,
-			  seasons=season_choice,
+              search=inst_choice,
+              title=inst_choice,
+              degree=deg_choice,
+              field=major_choice,
+              status=status_choice,
+              seasons=season_choice,
               stack=stack,
+              axis_lines=axis_lines,
+              grid_lines=grid_lines,
               debug=False)
 
 st.pyplot(fig)
