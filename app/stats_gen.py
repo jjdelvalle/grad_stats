@@ -265,8 +265,8 @@ def get_uni_stats(u_df,
 @st.cache
 def load_data():
     grad_df = pd.read_csv('app/data/full_data_clean.csv', index_col=0, low_memory=False)
-    grad_df.loc[:, 'institution'] = grad_df['clean_institution']
-    grad_df.loc[:, 'major'] = grad_df['clean_major']
+    grad_df.loc[:, 'institution'] = grad_df['clean_institution'].str.strip()
+    grad_df.loc[:, 'major'] = grad_df['clean_major'].str.strip()
     grad_df = grad_df[(grad_df['new_gre'] == True) | (grad_df['new_gre'].isna())]
     grad_df = grad_df[~grad_df['decdate'].isna()]
     grad_df.loc[:,'year'] = grad_df['decdate'].str[-4:].astype(int)
@@ -289,6 +289,7 @@ def load_data():
 grad_df = load_data()
 
 insts = grad_df['institution'].drop_duplicates().sort_values().tolist()
+insts.insert(0, None)
 majors = grad_df['major'].drop_duplicates().sort_values().tolist()
 degrees = grad_df['degree'].drop_duplicates().sort_values().tolist()
 seasons = grad_df['season'].drop_duplicates().sort_values().tolist()
