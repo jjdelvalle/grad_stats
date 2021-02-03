@@ -84,7 +84,7 @@ def get_uni_stats(u_df,
         gpa_multiple = 'dodge'
 
     # Trying to pick red/green colorblind-friendly colors
-    sns.set_theme(style="white", font_scale=.7)
+    sns.set_theme(style="white", font_scale=1)
     flatui = ["#2eff71", "#ff0000", "#0000ff"]
     sns.set_palette(flatui)
     acc_patch = mpatches.Patch(color='#2eff7180')
@@ -103,8 +103,8 @@ def get_uni_stats(u_df,
         start_time = time.time()
 
     # This generates 4 graphs, so let's make it a 2x2 grid
-    fig, ax = plt.subplots(2,2)
-    fig.set_size_inches(7, 7)
+    fig, ax = plt.subplots(2,2, dpi=80)
+    fig.set_size_inches(10, 10)
     
     # Timeline stats
     u_df = create_filter(u_df, degree, ['Accepted', 'Rejected', 'Interview'], search, field, status, seasons)
@@ -167,11 +167,11 @@ def get_uni_stats(u_df,
         if hue == 'decisionfin':
             counts = u_df[graph_filt][hue].value_counts().reindex(hue_order)
             l = [f'{value} (n={count})' for value, count in counts.iteritems()]
-            ax[0][0].legend(handles=[acc_line, rej_line, int_line], labels=l, title="Decision")
+            ax[0][0].legend(handles=[acc_line, rej_line, int_line], labels=l, title="Decision", fontsize=8)
 
     ax[0][0].set_xlabel("Date")
     ax[0][0].set_ylabel("Count")
-    ax[0][0].set_title("Decision Timeline", fontsize=10)
+    ax[0][0].set_title("Decision Timeline", fontsize=15)
     if debug:
         print("timeline aesthetics time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
@@ -189,14 +189,14 @@ def get_uni_stats(u_df,
                      ax=ax[0][1])
         ax[0][1].set_xlabel("GPA")
         ax[0][1].set_ylabel("Count")
-        ax[0][1].set_title("GPA Distribution ({0} values)".format(gpa_multiple), fontsize=10)
+        ax[0][1].set_title("GPA Distribution ({0} values)".format(gpa_multiple), fontsize=15)
         # Add frequency counts
         h, l = ax[0][1].get_legend_handles_labels()
         if h is not None and l is not None:
             if hue == 'decisionfin':
                 counts = u_df[gpa_filt][hue].value_counts().reindex(hue_order)
                 l = [f'{value} (n={count})' for value, count in counts.iteritems()]
-                ax[0][1].legend(handles=[acc_patch, rej_patch, int_patch], labels=l, title="Decision")
+                ax[0][1].legend(handles=[acc_patch, rej_patch, int_patch], labels=l, title="Decision", fontsize=8)
     if debug:
         print("gpa time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
@@ -227,7 +227,7 @@ def get_uni_stats(u_df,
         leg.set_title('Decision')
     ax[1][0].set_xlabel("GRE Section")
     ax[1][0].set_ylabel("Score")
-    ax[1][0].set_title("GRE Score distribution", fontsize=10)
+    ax[1][0].set_title("GRE Score distribution", fontsize=15)
     if debug:
         print("greqv time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
@@ -247,14 +247,14 @@ def get_uni_stats(u_df,
         leg.set_title('Decision')
     ax[1][1].set_xlabel("GRE Section")
     ax[1][1].set_ylabel("Score")
-    ax[1][1].set_title("GRE AWA Score distribution", fontsize=10)
+    ax[1][1].set_title("GRE AWA Score distribution", fontsize=15)
     if debug:
         print("grew time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
     
 
     sns.despine(left=True)
-    fig.suptitle(f"{title} {', '.join(field)} {', '.join(degree)}", size=20)
+    fig.suptitle(f"{title} {', '.join(field)} {', '.join(degree)}", size=25)
     fig.tight_layout()
     return fig
 
