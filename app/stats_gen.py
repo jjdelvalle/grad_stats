@@ -37,7 +37,7 @@ def filter_by(df, by: Union[str, dict], value: Union[str, list] = None, exact: b
             if exact:
                 filt = filt & (df[k] == value)
             else:
-                filt = filt & (df[k].str.contains(value, case=False))
+                filt = filt & (df[k].str.contains(value, case=False, regex=False))
         elif isinstance(value, list) and len(value) > 0:
             filt = filt & (df[k].isin(value))
     return df[filt]
