@@ -10,10 +10,23 @@ import matplotlib.patches as mpatches
 
 import time
 import datetime
+import logging
+import os, psutil
 from typing import Union
 
 st.set_page_config(page_title='Grad Stats',
          page_icon=':coffee:')
+
+# Wanna just execute once
+@st.cache
+def log_to_file():
+    fh = logging.FileHandler('gradstats.log')
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+    logger = st.logger.get_logger('gradstats_logger')
+    logger.handlers = []
+    logger.addHandler(fh)
+    return logger
 
 def vec_dt_replace(series, year=None, month=None, day=None):
     return pd.to_datetime(
@@ -42,7 +55,6 @@ def filter_by(df, by: Union[str, dict], value: Union[str, list] = None, exact: b
             filt = filt & (df[k].isin(value))
     return filt
 
-@st.cache(max_entries=10, ttl=3600)
 def create_filter(df,
                   degree: str = None,
                   decisionfin: Union[str, list] = None,
@@ -102,7 +114,8 @@ def get_uni_stats(u_df,
         hue_order = ['American', 'International', 'International with US Degree', 'Other']
 
     if debug:
-        print("prep time: %.2f seconds" % (time.time() - start_time))
+        # We're logging at an info level because of streamlits logger...
+        logger.info("prep time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
 
     # This generates 4 graphs, so let's make it a 2x2 grid
@@ -115,7 +128,7 @@ def get_uni_stats(u_df,
         return fig
 
     if debug:
-        print("filter time: %.2f seconds" % (time.time() - start_time))
+        logger.info("filter time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
 
     graph_filt =  u_df['uniform_dates'] < datetime.datetime(2020, 6, 1)
@@ -123,7 +136,7 @@ def get_uni_stats(u_df,
         return fig
 
     if debug:
-        print("preptimeline time: %.2f seconds" % (time.time() - start_time))
+        logger.info("preptimeline time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
 
     sns.histplot(data=u_df[graph_filt],
@@ -137,7 +150,7 @@ def get_uni_stats(u_df,
                  ax=ax[0][0])
 
     if debug:
-        print("actual timeline plot time: %.2f seconds" % (time.time() - start_time))
+        logger.info("actual timeline plot time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
 
     locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
@@ -176,7 +189,7 @@ def get_uni_stats(u_df,
     ax[0][0].set_ylabel("Count")
     ax[0][0].set_title("Decision Timeline", fontsize=15)
     if debug:
-        print("timeline aesthetics time: %.2f seconds" % (time.time() - start_time))
+        logger.info("timeline aesthetics time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
     
     # Get GPA stats
@@ -201,7 +214,7 @@ def get_uni_stats(u_df,
                 l = [f'{value} (n={count})' for value, count in counts.iteritems()]
                 ax[0][1].legend(handles=[acc_patch, rej_patch, int_patch], labels=l, title="Decision", fontsize=8)
     if debug:
-        print("gpa time: %.2f seconds" % (time.time() - start_time))
+        logger.info("gpa time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
 
     # Get GRE stats
@@ -232,7 +245,7 @@ def get_uni_stats(u_df,
     ax[1][0].set_ylabel("Score")
     ax[1][0].set_title("GRE Score distribution", fontsize=15)
     if debug:
-        print("greqv time: %.2f seconds" % (time.time() - start_time))
+        logger.info("greqv time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
     
     # Get GRE AWA stats
@@ -252,15 +265,15 @@ def get_uni_stats(u_df,
     ax[1][1].set_ylabel("Score")
     ax[1][1].set_title("GRE AWA Score distribution", fontsize=15)
     if debug:
-        print("grew time: %.2f seconds" % (time.time() - start_time))
+        logger.info("grew time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
     
 
     if not axis_lines:
         sns.despine(left=True)
-    inst_sep = '-' if len(field) > 0 or len(degree) > 0 else ''
-    field_sep = '-' if degree is not None and len(degree) > 0 else ''
-    fig.suptitle(f"{title if title is not None else 'All schools'} {inst_sep} {', '.join(field)} {field_sep} {', '.join(degree)}", size=25)
+    inst_sep = ' - ' if len(field) > 0 else ''
+    field_sep = ' - ' if degree is not None and len(degree) > 0 else ''
+    fig.suptitle(f"{title if title is not None else 'All schools'}{inst_sep}{', '.join(field)}{field_sep}{', '.join(degree)}", size=25)
     fig.tight_layout()
     return fig
 
@@ -272,7 +285,8 @@ def load_data():
     grad_df = grad_df[(grad_df['new_gre'] == True) | (grad_df['new_gre'].isna())]
     grad_df = grad_df[~grad_df['decdate'].isna()]
     grad_df.loc[:,'year'] = grad_df['decdate'].str[-4:].astype(int)
-    grad_df = grad_df[(grad_df['year'] > 2000) & (grad_df['year'] < datetime.datetime.now().year)]
+    grad_df = grad_df[(grad_df['year'] >= 2011) & (grad_df['year'] < datetime.datetime.now().year)]
+    grad_df = grad_df[grad_df['season'] > 'F11']
     # Normalize to 2020. 2020 is a good choice because it's recent AND it's a leap year
     grad_df.loc[:, 'uniform_dates'] = vec_dt_replace(pd.to_datetime(grad_df['decdate']), year=2020)
     # Get december dates to be from "2019" so Fall decisions that came in Dec come before the Jan ones.
@@ -299,8 +313,10 @@ def load_data():
     grad_df['grew'] = grad_df['grew'].astype(np.float16)
     grad_df['new_gre'] = grad_df['new_gre'].astype('bool')
     grad_df['year'] = grad_df['year'].astype(np.int8)
+    logger.info(grad_df.memory_usage(deep=True) / 1024 ** 2)
     return grad_df
 
+logger = log_to_file()
 grad_df = load_data()
 
 insts = grad_df['institution'].drop_duplicates().sort_values().tolist()
@@ -340,6 +356,8 @@ stack = st.sidebar.checkbox('Stack bars in GPA plot', value=False)
 axis_lines = st.sidebar.checkbox('Show axis lines in plots', value=False)
 grid_lines = st.sidebar.checkbox('Show grid lines in plots', value=False)
 
+process = psutil.Process(os.getpid())
+logger.info(f"{inst_choice},{major_choice},{deg_choice},{season_choice},{status_choice},{process.memory_info().rss / 1024 **2}")
 fig = get_uni_stats(grad_df,
               search=inst_choice,
               title=inst_choice,
@@ -351,8 +369,5 @@ fig = get_uni_stats(grad_df,
               axis_lines=axis_lines,
               grid_lines=grid_lines,
               debug=False)
-import os, psutil
-process = psutil.Process(os.getpid())
-print(process.memory_info().rss / 1024 ** 2)
 
 st.pyplot(fig)
