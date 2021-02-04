@@ -40,7 +40,7 @@ def filter_by(df, by: Union[str, dict], value: Union[str, list] = None, exact: b
                 filt = filt & (df[k].str.contains(value, case=False, regex=False))
         elif isinstance(value, list) and len(value) > 0:
             filt = filt & (df[k].isin(value))
-    return df[filt]
+    return filt
 
 @st.cache(max_entries=10, ttl=3600)
 def create_filter(df,
@@ -110,7 +110,7 @@ def get_uni_stats(u_df,
     fig.set_size_inches(10, 10)
     
     # Timeline stats
-    u_df = create_filter(u_df, degree, ['Accepted', 'Rejected', 'Interview'], search, field, status, seasons)
+    u_df = u_df[create_filter(u_df, degree, ['Accepted', 'Rejected', 'Interview'], search, field, status, seasons)]
     if len(u_df) < 1:
         return fig
 
@@ -258,7 +258,9 @@ def get_uni_stats(u_df,
 
     if not axis_lines:
         sns.despine(left=True)
-    fig.suptitle(f"{title} {', '.join(field)} {', '.join(degree)}", size=25)
+    inst_sep = '-' if len(field) > 0 or len(degree) > 0 else ''
+    field_sep = '-' if degree is not None and len(degree) > 0 else ''
+    fig.suptitle(f"{title if title is not None else 'All schools'} {inst_sep} {', '.join(field)} {field_sep} {', '.join(degree)}", size=25)
     fig.tight_layout()
     return fig
 
@@ -349,5 +351,8 @@ fig = get_uni_stats(grad_df,
               axis_lines=axis_lines,
               grid_lines=grid_lines,
               debug=False)
+import os, psutil
+process = psutil.Process(os.getpid())
+print(process.memory_info().rss / 1024 ** 2)
 
 st.pyplot(fig)
