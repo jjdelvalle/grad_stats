@@ -42,7 +42,7 @@ def filter_by(df, by: Union[str, dict], value: Union[str, list] = None, exact: b
             filt = filt & (df[k].isin(value))
     return df[filt]
 
-@st.cache
+@st.cache(max_entries=10, ttl=3600)
 def create_filter(df,
                   degree: str = None,
                   decisionfin: Union[str, list] = None,
@@ -278,12 +278,25 @@ def load_data():
     grad_df.loc[dec_filter, 'uniform_dates'] = vec_dt_replace(pd.to_datetime(grad_df[dec_filter]['uniform_dates']), year=2019)
     grad_df.drop(columns=['comment',
                           'date_add',
+                          'decdate',
                           'clean_institution',
                           'clean_major',
                           'date_add_ts',
                           'sub',
                           'decdate_ts',
                           'method'], inplace=True)
+    grad_df['institution'] = grad_df['institution'].astype('category')
+    grad_df['major'] = grad_df['major'].astype('category')
+    grad_df['degree'] = grad_df['degree'].astype('category')
+    grad_df['season'] = grad_df['season'].astype('category')
+    grad_df['decisionfin'] = grad_df['decisionfin'].astype('category')
+    grad_df['status'] = grad_df['status'].astype('category')
+    grad_df['gpafin'] = grad_df['gpafin'].astype(np.float16)
+    grad_df['grev'] = grad_df['grev'].astype(np.float16)
+    grad_df['grem'] = grad_df['grem'].astype(np.float16)
+    grad_df['grew'] = grad_df['grew'].astype(np.float16)
+    grad_df['new_gre'] = grad_df['new_gre'].astype('bool')
+    grad_df['year'] = grad_df['year'].astype(np.int8)
     return grad_df
 
 grad_df = load_data()
