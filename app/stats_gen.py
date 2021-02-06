@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
+from matplotlib.backends.backend_agg import RendererAgg
 
 import time
 import datetime
@@ -273,6 +274,11 @@ def get_uni_stats(u_df,
         sns.despine(left=True)
     inst_sep = ' - ' if len(field) > 0 else ''
     field_sep = ' - ' if degree is not None and len(degree) > 0 else ''
+    if title is not None and len(title) > 25:
+        if inst_sep != '':
+            inst_sep = inst_sep + '\n'
+        elif field_sep != '':
+            field_sep = field_sep + '\n'
     fig.suptitle(f"{title if title is not None else 'All schools'}{inst_sep}{', '.join(field)}{field_sep}{', '.join(degree)}", size=25)
     fig.tight_layout()
     return fig
@@ -358,16 +364,20 @@ grid_lines = st.sidebar.checkbox('Show grid lines in plots', value=False)
 
 process = psutil.Process(os.getpid())
 logger.info(f"{inst_choice},{major_choice},{deg_choice},{season_choice},{status_choice},{process.memory_info().rss / 1024 **2}")
-fig = get_uni_stats(grad_df,
-              search=inst_choice,
-              title=inst_choice,
-              degree=deg_choice,
-              field=major_choice,
-              status=status_choice,
-              seasons=season_choice,
-              stack=stack,
-              axis_lines=axis_lines,
-              grid_lines=grid_lines,
-              debug=False)
+_lock = RendererAgg.lock
 
-st.pyplot(fig)
+with _lock:
+    fig = get_uni_stats(grad_df,
+                  search=inst_choice,
+                  title=inst_choice,
+                  degree=deg_choice,
+                  field=major_choice,
+                  status=status_choice,
+                  seasons=season_choice,
+                  stack=stack,
+                  axis_lines=axis_lines,
+                  grid_lines=grid_lines,
+                  debug=False)
+
+    st.pyplot(fig)
+
