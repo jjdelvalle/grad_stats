@@ -142,6 +142,7 @@ def get_uni_stats(u_df,
 
     sns.histplot(data=u_df[graph_filt],
                  x='uniform_dates',
+                 bins=100,
                  hue=hue,
                  cumulative=True,
                  discrete=False,
@@ -154,30 +155,14 @@ def get_uni_stats(u_df,
         logger.info("actual timeline plot time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
 
-    locator = mdates.AutoDateLocator(minticks=3, maxticks=7)
-    formatter = mdates.ConciseDateFormatter(locator)
-    formatter.formats = ['%b',  # years
-                         '%b',       # months
-                         '%d',       # days
-                         '%H:%M',    # hrs
-                         '%H:%M',    # min
-                         '%S.%f', ]  # secs
-    # Hide the year
-    formatter.zero_formats = ['%b',  # years
-                         '%b',       # months
-                         '%d',       # days
-                         '%H:%M',    # hrs
-                         '%H:%M',    # min
-                         '%S.%f', ]  # secs
-    # Hide the year
-    formatter.offset_formats = ['',  # years
-                         '',       # months
-                         '%d',       # days
-                         '%H:%M',    # hrs
-                         '%H:%M',    # mins
-                         '%S.%f', ]  # secs
+    locator = mdates.MonthLocator([12,1,2,3,4,5])
+    formatter = mdates.DateFormatter('%b')
+    day_locator = mdates.DayLocator(bymonthday=[1, 15])
+    day_formatter = mdates.DateFormatter('%d')
     ax[0][0].xaxis.set_major_locator(locator)
     ax[0][0].xaxis.set_major_formatter(formatter)
+    # ax[0][0].xaxis.set_minor_locator(day_locator)
+    # ax[0][0].xaxis.set_minor_formatter(day_formatter)
     h, l = ax[0][0].get_legend_handles_labels()
     # Add frequency counts
     if h is not None and l is not None:
@@ -293,6 +278,7 @@ def load_data():
     grad_df.loc[:,'year'] = grad_df['decdate'].str[-4:].astype(int)
     grad_df = grad_df[(grad_df['year'] >= 2011) & (grad_df['year'] < datetime.datetime.now().year)]
     grad_df = grad_df[grad_df['season'] > 'F11']
+    grad_df['decdate'] = pd.to_datetime(grad_df['decdate'], dayfirst=True)
     # Normalize to 2020. 2020 is a good choice because it's recent AND it's a leap year
     grad_df.loc[:, 'uniform_dates'] = vec_dt_replace(pd.to_datetime(grad_df['decdate']), year=2020)
     # Get december dates to be from "2019" so Fall decisions that came in Dec come before the Jan ones.
@@ -318,7 +304,7 @@ def load_data():
     grad_df['grem'] = grad_df['grem'].astype(np.float16)
     grad_df['grew'] = grad_df['grew'].astype(np.float16)
     grad_df['new_gre'] = grad_df['new_gre'].astype('bool')
-    grad_df['year'] = grad_df['year'].astype(np.int8)
+    grad_df['year'] = grad_df['year'].astype(np.int16)
     logger.info(grad_df.memory_usage(deep=True) / 1024 ** 2)
     return grad_df
 
