@@ -314,7 +314,7 @@ axis_lines = st.sidebar.checkbox('Show axis lines in plots', value=False)
 grid_lines = st.sidebar.checkbox('Show grid lines in plots', value=True)
 
 process = psutil.Process(os.getpid())
-logger.info(f"{inst_choice},{major_choice},{deg_choice},{season_choice},{status_choice},{process.memory_info().rss / 1024 **2}")
+logger.info(f"{inst_choice}|{major_choice}|{deg_choice}|{season_choice}|{status_choice}|{process.memory_info().rss / 1024 **2}")
 
 pltly_fig = get_uni_stats(grad_df,
               search=inst_choice,
