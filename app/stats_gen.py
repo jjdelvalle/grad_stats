@@ -1,13 +1,9 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import seaborn as sns
 
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import matplotlib.lines as mlines
-import matplotlib.patches as mpatches
-from matplotlib.backends.backend_agg import RendererAgg
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 import time
 import datetime
@@ -16,7 +12,8 @@ import os, psutil
 from typing import Union
 
 st.set_page_config(page_title='Grad Stats',
-         page_icon=':coffee:')
+         page_icon=':coffee:',
+         layout="wide")
 
 # Wanna just execute once
 @st.cache
@@ -87,32 +84,21 @@ def get_uni_stats(u_df,
                     debug: bool = False):
     if debug:
         start_time = time.time()
-    title = title if title is not None else search
     if isinstance(degree, str) and degree not in ['MS', 'PhD', 'MEng', 'MFA', 'MBA', 'Other']:
         degree = 'PhD'
 
-    if stack:
-        gpa_multiple = 'stack'
-    else:
-        gpa_multiple = 'dodge'
+    gpa_multiple = 'stack' if stack else 'group'
+
 
     # Trying to pick red/green colorblind-friendly colors
-    if grid_lines:
-        sns.set_theme(style="whitegrid", font_scale=1)
-    else:
-        sns.set_theme(style="white", font_scale=1)
-    flatui = ["#2eff71", "#ff0000", "#0000ff"]
-    sns.set_palette(flatui)
-    acc_patch = mpatches.Patch(color='#2eff7180')
-    rej_patch = mpatches.Patch(color='#ff000080')
-    int_patch = mpatches.Patch(color='#0000ff80')
-    acc_line = mlines.Line2D([], [], color='#2eff71')
-    rej_line = mlines.Line2D([], [], color='#ff0000')
-    int_line = mlines.Line2D([], [], color='#0000ff')
-  
-    hue_order = ['Accepted', 'Rejected', 'Interview']
-    if hue == 'status':
-        hue_order = ['American', 'International', 'International with US Degree', 'Other']
+    # 1. light green,
+    # 2. red,
+    # 3. dark blue
+    color_dict = {
+        'Accepted': '#2eff71',
+        'Rejected': '#ff0000',
+        'Interview': '#0000ff'
+    }
 
     if debug:
         # We're logging at an info level because of streamlits logger...
@@ -120,13 +106,14 @@ def get_uni_stats(u_df,
         start_time = time.time()
 
     # This generates 4 graphs, so let's make it a 2x2 grid
-    fig, ax = plt.subplots(2,2, dpi=80)
-    fig.set_size_inches(10, 10)
+    pltly_fig = make_subplots(rows=2, cols=2,
+                              vertical_spacing=0.12,
+                              subplot_titles=("Decision Timeline", "GPA Distribution", "GRE Score Distribution", "GRE AWA Score Distribution"))
     
     # Timeline stats
     u_df = u_df[create_filter(u_df, degree, ['Accepted', 'Rejected', 'Interview'], search, field, status, seasons)]
     if len(u_df) < 1:
-        return fig
+        return pltly_fig
 
     if debug:
         logger.info("filter time: %.2f seconds" % (time.time() - start_time))
@@ -134,79 +121,44 @@ def get_uni_stats(u_df,
 
     graph_filt =  u_df['uniform_dates'] < datetime.datetime(2020, 6, 1)
     if sum(graph_filt) == 0:
-        return fig
+        return pltly_fig
 
-    if debug:
-        logger.info("preptimeline time: %.2f seconds" % (time.time() - start_time))
-        start_time = time.time()
-
-    sns.histplot(data=u_df[graph_filt],
-                 x='uniform_dates',
-                 bins=100,
-                 hue=hue,
-                 cumulative=True,
-                 discrete=False,
-                 element='step',
-                 fill=False,
-                 hue_order=hue_order,
-                 ax=ax[0][0])
-
-    if debug:
-        logger.info("actual timeline plot time: %.2f seconds" % (time.time() - start_time))
-        start_time = time.time()
-
-    locator = mdates.MonthLocator([12,1,2,3,4,5])
-    formatter = mdates.DateFormatter('%b')
-    day_locator = mdates.DayLocator(bymonthday=[1, 15])
-    day_formatter = mdates.DateFormatter('%d')
-    ax[0][0].xaxis.set_major_locator(locator)
-    ax[0][0].xaxis.set_major_formatter(formatter)
-    # ax[0][0].xaxis.set_minor_locator(day_locator)
-    # ax[0][0].xaxis.set_minor_formatter(day_formatter)
-    h, l = ax[0][0].get_legend_handles_labels()
-    # Add frequency counts
-    if h is not None and l is not None:
-        if hue == 'decisionfin':
-            counts = u_df[graph_filt][hue].value_counts().reindex(hue_order)
-            l = [f'{value} (n={count})' for value, count in counts.iteritems()]
-            ax[0][0].legend(handles=[acc_line, rej_line, int_line], labels=l, title="Decision", fontsize=8)
-
-    ax[0][0].set_xlabel("Date")
-    ax[0][0].set_ylabel("Count")
-    ax[0][0].set_title("Decision Timeline", fontsize=15)
     if debug:
         logger.info("timeline aesthetics time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
+
+    for category in sorted(u_df[hue].unique().tolist()):
+        grouped_df = u_df[(graph_filt) & (u_df[hue] == category)].groupby(by=['uniform_dates']).size().reset_index(name='counts')
+        pltly_fig.add_trace(go.Scatter(x=grouped_df['uniform_dates'],
+                                       y=grouped_df['counts'].cumsum(),
+                                         name=category,
+                                         mode='lines+markers',
+                                         marker_color=color_dict[category]),
+                            row=1,
+                            col=1)
     
     # Get GPA stats
     gpa_filt = (~u_df['gpafin'].isna()) & (u_df['gpafin'] <= 4)
-    gpa_bins = 10 if gpa_multiple == 'dodge' else 20
-    if sum(gpa_filt) > 0:
-        sns.histplot(data=u_df[gpa_filt],
-                     x='gpafin',
-                     hue=hue,
-                     hue_order=hue_order,
-                     multiple=gpa_multiple,
-                     bins=gpa_bins,
-                     ax=ax[0][1])
-        ax[0][1].set_xlabel("GPA")
-        ax[0][1].set_ylabel("Count")
-        ax[0][1].set_title("GPA Distribution ({0} values)".format(gpa_multiple), fontsize=15)
-        # Add frequency counts
-        h, l = ax[0][1].get_legend_handles_labels()
-        if h is not None and l is not None:
-            if hue == 'decisionfin':
-                counts = u_df[gpa_filt][hue].value_counts().reindex(hue_order)
-                l = [f'{value} (n={count})' for value, count in counts.iteritems()]
-                ax[0][1].legend(handles=[acc_patch, rej_patch, int_patch], labels=l, title="Decision", fontsize=8)
+    gpa_bins = 10 if gpa_multiple == 'group' else 20
     if debug:
         logger.info("gpa time: %.2f seconds" % (time.time() - start_time))
         start_time = time.time()
 
+    for category in sorted(u_df[hue].unique().tolist(), reverse=True):
+        pltly_fig.add_trace(go.Histogram(x=u_df[(gpa_filt) & (u_df[hue] == category)]['gpafin'],
+                                         nbinsx=gpa_bins,
+                                         name=category,
+                                         marker_color=color_dict[category],
+                                         showlegend=False),
+                            row=1,
+                            col=2)
+
+
     # Get GRE stats
     gre_filt = (~u_df['grev'].isna()) & (~u_df['grem'].isna()) & (u_df['new_gre'])
     if sum(gre_filt) == 0:
-        return fig
+        return pltly_fig
+
     dfq = u_df[gre_filt][['grem', hue]]
     dfq = dfq.assign(gre_type='Quant')
     dfq.columns = ['score', hue, 'gre_type']
@@ -215,64 +167,72 @@ def get_uni_stats(u_df,
     dfv = dfv.assign(gre_type='Verbal')
     dfv.columns = ['score', hue, 'gre_type']
 
-    cdf = pd.concat([dfq, dfv])
-    sns.boxplot(data=cdf,
-                x='gre_type',
-                y='score',
-                hue=hue,
-                linewidth=1,
-                fliersize=1,
-                hue_order=hue_order,
-                ax=ax[1][0])
-    leg = ax[1][0].get_legend()
-    if leg is not None:
-        leg.set_title('Decision')
-    ax[1][0].set_xlabel("GRE Section")
-    ax[1][0].set_ylabel("Score")
-    ax[1][0].set_title("GRE Score distribution", fontsize=15)
-    if debug:
-        logger.info("greqv time: %.2f seconds" % (time.time() - start_time))
-        start_time = time.time()
-    
-    # Get GRE AWA stats
-    gre_filt = (~u_df['grew'].isna()) & (u_df['new_gre'])
-    sns.boxplot(data=u_df[gre_filt],
-                x=['AWA'] * len(u_df[gre_filt]),
-                y='grew',
-                hue=hue,
-                linewidth=1,
-                fliersize=1,
-                hue_order=hue_order,
-                ax=ax[1][1])
-    leg = ax[1][1].get_legend()
-    if leg is not None:
-        leg.set_title('Decision')
-    ax[1][1].set_xlabel("GRE Section")
-    ax[1][1].set_ylabel("Score")
-    ax[1][1].set_title("GRE AWA Score distribution", fontsize=15)
-    if debug:
-        logger.info("grew time: %.2f seconds" % (time.time() - start_time))
-        start_time = time.time()
-    
+    dfw = u_df[gre_filt][['grew', hue]]
+    dfw = dfw.assign(gre_type='AWA')
+    dfw.columns = ['score', hue, 'gre_type']
 
-    if not axis_lines:
-        sns.despine(left=True)
+    cdf = pd.concat([dfq, dfv])
+
+    for category in sorted(cdf[hue].unique().tolist()):
+        pltly_fig.add_trace(go.Box(y=cdf[cdf[hue] == category]['score'],
+                                   x=cdf[cdf[hue] == category]['gre_type'],
+                                   name=category,
+                                   marker_color=color_dict[category],
+                                   showlegend=False,
+                                   offsetgroup="vq" + category,
+                                   alignmentgroup="vq"),
+                            row=2,
+                            col=1)
+
+    for category in sorted(dfw[hue].unique().tolist()):
+        pltly_fig.add_trace(go.Box(y=dfw[dfw[hue] == category]['score'],
+                                   x=dfw[dfw[hue] == category]['gre_type'],
+                                   name=category,
+                                   marker_color=color_dict[category],
+                                   showlegend=False,
+                                   offsetgroup="aw" + category,
+                                   alignmentgroup="aw"),
+                            row=2,
+                            col=2)
+
     inst_sep = ' - ' if len(field) > 0 else ''
     field_sep = ' - ' if degree is not None and len(degree) > 0 else ''
-    if title is not None and len(title) > 25:
+    if title is not None and len(title) > 20:
         if inst_sep != '':
-            inst_sep = inst_sep + '\n'
+            inst_sep = inst_sep + '<br>'
         elif field_sep != '':
-            field_sep = field_sep + '\n'
-    fig.suptitle(f"{title if title is not None else 'All schools'}{inst_sep}{', '.join(field)}{field_sep}{', '.join(degree)}", size=25)
-    fig.tight_layout()
-    return fig
+            field_sep = field_sep + '<br>'
+
+    pltly_fig.update_xaxes(showgrid=grid_lines, zeroline=False, showline=axis_lines, linecolor="#000")
+    pltly_fig.update_xaxes(tickformat='%d %b', row=1, col=1)
+    pltly_fig.update_yaxes(showgrid=grid_lines, zeroline=False, showline=axis_lines, linecolor="#000")
+    pltly_fig.layout.title.text = f"{title if title is not None else 'All schools'}{inst_sep}{', '.join(field)}{field_sep}{', '.join(degree)}"
+    pltly_fig.layout.title.font.size = 30
+    pltly_fig.update_layout(
+        title_x=0.5,
+        autosize=False,
+        height=900,
+        paper_bgcolor="White",
+        boxmode='group',
+        barmode=gpa_multiple
+    )
+
+    pltly_fig.update_layout(legend=dict(
+        yanchor="top",
+        y=0.99,
+        xanchor="left",
+        x=0.01,
+        itemsizing="constant"
+    ))
+
+    return pltly_fig
 
 @st.cache
 def load_data():
     grad_df = pd.read_csv('app/data/full_data_clean.csv', index_col=0, low_memory=False)
     grad_df.loc[:, 'institution'] = grad_df['clean_institution'].str.strip()
     grad_df.loc[:, 'major'] = grad_df['clean_major'].str.strip()
+    grad_df = grad_df[grad_df['gpafin'] <= 4]
     grad_df = grad_df[(grad_df['new_gre'] == True) | (grad_df['new_gre'].isna())]
     grad_df = grad_df[~grad_df['decdate'].isna()]
     grad_df.loc[:,'year'] = grad_df['decdate'].str[-4:].astype(int)
@@ -323,9 +283,13 @@ hide_streamlit_style = """
 <style>
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
-.block-container {padding: 0px}
+.block-container {
+    padding: 0px;
+}
+.main {
+    padding-left: 3em;
+}
 </style>
-
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
 
@@ -343,27 +307,26 @@ season_choice = st.sidebar.multiselect('Season:', seasons)
 status_choice = st.sidebar.multiselect('Status:', status)
 
 st.sidebar.markdown('## Display options')
+
 # Display options
 stack = st.sidebar.checkbox('Stack bars in GPA plot', value=False)
 axis_lines = st.sidebar.checkbox('Show axis lines in plots', value=False)
-grid_lines = st.sidebar.checkbox('Show grid lines in plots', value=False)
+grid_lines = st.sidebar.checkbox('Show grid lines in plots', value=True)
 
 process = psutil.Process(os.getpid())
 logger.info(f"{inst_choice},{major_choice},{deg_choice},{season_choice},{status_choice},{process.memory_info().rss / 1024 **2}")
-_lock = RendererAgg.lock
 
-with _lock:
-    fig = get_uni_stats(grad_df,
-                  search=inst_choice,
-                  title=inst_choice,
-                  degree=deg_choice,
-                  field=major_choice,
-                  status=status_choice,
-                  seasons=season_choice,
-                  stack=stack,
-                  axis_lines=axis_lines,
-                  grid_lines=grid_lines,
-                  debug=False)
+pltly_fig = get_uni_stats(grad_df,
+              search=inst_choice,
+              title=inst_choice,
+              degree=deg_choice,
+              field=major_choice,
+              status=status_choice,
+              seasons=season_choice,
+              stack=stack,
+              axis_lines=axis_lines,
+              grid_lines=grid_lines,
+              debug=False)
 
-    st.pyplot(fig)
+st.plotly_chart(pltly_fig, use_container_width=True)
 
