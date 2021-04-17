@@ -18,8 +18,11 @@ See `requirements.txt` but here are the main ones:
 
 * streamlit
 * pandas
-* sns
-* plt
+* plotly
+
+## Running this on my VPS
+
+`$ streamlit run app/stats_gen.py --browser.serverPort 80 --browser.serverAddress gradstats.jjdv.xyz --server.port 8888`
 
 ### NOTE
 

@@ -1,5 +1,4 @@
-matplotlib==3.3.3
+plotly==4.14.3
 numpy==1.19.5
 pandas==1.2.0
-seaborn==0.11.1
 streamlit==0.75.0
