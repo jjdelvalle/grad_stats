@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
+import gc
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -210,6 +211,7 @@ def get_uni_stats(u_df,
     pltly_fig.layout.title.font.size = 30
     pltly_fig.update_layout(
         title_x=0.5,
+        margin=dict(t=120),
         autosize=False,
         height=900,
         paper_bgcolor="White",
@@ -329,4 +331,5 @@ pltly_fig = get_uni_stats(grad_df,
               debug=False)
 
 st.plotly_chart(pltly_fig, use_container_width=True)
+gc.collect()
 
